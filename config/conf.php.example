@@ -1,0 +1,14 @@
+<?php
+
+return [
+    'sheetId' => '', //id гугл таблицы
+
+    'client_id' => '', //id интеграции амо
+    'client_secret' => '', //секретный ключ
+    'grant_type' => 'authorization_code',
+    'redirect_uri' => 'http://localhost:8000/callback',
+
+    'subdomain' => '',
+
+    'code' => ''
+];

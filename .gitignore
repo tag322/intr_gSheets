@@ -1,0 +1,4 @@
+config/conf.php
+config/auth/*.json
+config/*.json
+/vendor
