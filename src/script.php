@@ -13,7 +13,7 @@ $client->addScope(Google_Service_Sheets::SPREADSHEETS);
 authenticateGoogle($client);
 $service = new Google_Service_Sheets($client);
 
-$gSheetData = fetchDataFromTable($service, $fetchRange);
+$gSheetData = fetchDataFromTable($config, $service, $fetchRange);
 
 //проверка токена
 $amoTokens = []; 
@@ -27,26 +27,23 @@ if(file_exists(__DIR__ . '/../config/auth/amo_token.json')) {
         ]);
     } catch (GuzzleHttp\Exception\RequestException $e) {
         if ($e->getResponse()->getStatusCode() === 401) {
-            print "ошибка, пробуем обновить access_token";
-            refreshAccessToken();
+            print "ошибка, пробуем обновить access_token" . PHP_EOL;
+            refreshAccessToken($config, $httpClient);
         } else {
             print "ошибка: " . $e->getMessage();
         }
     }
 } else {
-    initialAmoAuth($httpClient);
+    initialAmoAuth($config, $httpClient);
     $amoTokens = json_decode(file_get_contents(__DIR__ . '/../config/auth/amo_token.json'), true);
 }
 
-writeToTable($gSheetData, $service, $httpClient, $amoTokens);
+writeToTable($config, $gSheetData, $service, $httpClient, $amoTokens);
 
 
 
 
-function fetchDataFromTable($service, $range) {
-    $config = require __DIR__ . '/../config/conf.php';
-    $sheetId = $config['sheetId'];
-
+function fetchDataFromTable($config, $service, $range) {
     try {
         $result = $service->spreadsheets_values->get($sheetId, $range)->getValues();
         // $numRows = $result->getValues() !== null ? count($result->getValues()) : 0;
@@ -75,7 +72,7 @@ function executeRequestToAmo($httpClient, $url, $amoTokens) {
 
 function executeGsheetUpdateRequest($service, $payload) {
     try {
-        $service->spreadsheets_values->update($payload['spreadsheetId'], $payload['insertAdress'], $payload['dataToInsert']);
+        $service->spreadsheets_values->update($payload['spreadsheetId'], $payload['insertAdress'], $payload['dataToInsert'], ['valueInputOption' => 'RAW']);
     } catch (Exception $e) {
         print "ошибка вставки значения в таблицу" . $e->getMessage() . PHP_EOL;
         return false;
@@ -83,10 +80,9 @@ function executeGsheetUpdateRequest($service, $payload) {
 }
 
 //функция одновременно делает запрос по юрлу из таблицы и делает post запрос в гугл апи
-function writeToTable($rowsArr, $service, $httpClient, $amoTokens) {
+function writeToTable($config, $service, $httpClient, $amoTokens, $rowsArr) {
 
     $weekdayName = date('l');
-    $config = require __DIR__ . '/../config/conf.php';
     $spreadsheetId = $config['sheetId'];
     $range = "Лист1!A1:D2";
 
@@ -116,6 +112,10 @@ function writeToTable($rowsArr, $service, $httpClient, $amoTokens) {
             }
  
             $dataToInsert = accessNestedValue($response, $pathToTargetData);
+
+            $dataToInsert = new Google_Service_Sheets_ValueRange([
+                'values' => [[$dataToInsert]], //передаваемое поле должно быть массивом из массивов
+            ]);
 
             $payload = [
                 'spreadsheetId' => $spreadsheetId,
@@ -154,8 +154,7 @@ function authenticateGoogle($client) {
     }
 }
 
-function initialAmoAuth($httpClient) {
-    $config = require __DIR__ . '/../config/conf.php';
+function initialAmoAuth($config, $httpClient) {
 
     $amoAuthLink = 'https://www.amocrm.ru/oauth?client_id=' . $config['client_id'] . '&state=statexample&mode=post_message&redirect_uri=' . $config['redirect_uri'];
     print 'откройте ссылку: ' . $amoAuthLink . PHP_EOL;
@@ -191,11 +190,9 @@ function initialAmoAuth($httpClient) {
     }
 }
 
-function refreshAccessToken() {
-    $config = require __DIR__ . '/../config/conf.php';
-    $subdomain = $config['subdomain'];
-    
-    $amoAuthUrl = "https://" . $subdomain . ".amocrm.ru/oauth2/access_token";
+function refreshAccessToken($config, $httpClient) {
+
+    $amoAuthUrl = "https://" . $config['subdomain'] . ".amocrm.ru/oauth2/access_token";
     $refreshToken = json_decode(file_get_contents(__DIR__ . '/../config/auth/amo_token.json'), true)['refresh_token'];
 
     try {
